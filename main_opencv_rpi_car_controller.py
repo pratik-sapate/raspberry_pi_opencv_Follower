@@ -1,10 +1,6 @@
-import RPi.GPIO as GPIO
-import time
 import cv2
-import threading
-import sys
-import test
-import numpy as np
+import RPi.GPIO as GPIO
+import os
 
 PIN_RIGHT_BOTTOM_GND = 5
 PIN_RIGHT_BOTTOM_5VE = 6
@@ -23,32 +19,15 @@ PWM_LEFT_TOP_GND = None
 PWM_LEFT_TOP_5VE = None
 PWM_RIGHT_TOP_GND = None
 PWM_RIGHT_TOP_5VE = None
-PWM_VALUE = 20
+PWM_VALUE = 10
+pwm_speed = 1
+last_pwm = 0
+position='S'
+arr = []
 
-def roi(image):
-    width, height= image.shape
-    # triangle = np.array([(0, width), (0, int(3*width/4)), (int(height/2), int(width/2)), (height, int(3*width/4)), (height, width)])
-    half = np.array([(0, width), (0, int(width / 2)), (height, int(width / 2)), (height, width)])
-    mask = np.zeros_like(image)
-    cv2.fillPoly(mask, np.int32([half]), (255, 0, 0), 255)
-    masked_image = cv2.bitwise_and(image, image, mask=mask)
-    return masked_image
-
-def webcam_operation():
-    video = cv2.VideoCapture(0)
-    video.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    video.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    while True:
-        _, image = video.read()
-        #ray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        #ret,thresh1 = cv2.threshold(gray,127,255,cv2.THRESH_BINARY)
-        #image = roi(thresh1)    
-        # print(angle)
-        cv2.imshow('Image', image)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break 
-            
 def init_rpi():
+    """initialize raspberry pi pins
+    mode : BCM"""
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(PIN_RIGHT_BOTTOM_GND, GPIO.OUT)
     GPIO.setup(PIN_RIGHT_BOTTOM_5VE, GPIO.OUT)
@@ -66,7 +45,7 @@ def init_rpi():
     global PWM_LEFT_TOP_5VE
     global PWM_RIGHT_TOP_GND
     global PWM_RIGHT_TOP_5VE
-
+    global position
 
     PWM_RIGHT_BOTTOM_GND = GPIO.PWM(PIN_RIGHT_BOTTOM_GND,  PWM_VALUE)
     PWM_RIGHT_BOTTOM_5VE = GPIO.PWM(PIN_RIGHT_BOTTOM_5VE,  PWM_VALUE)
@@ -78,6 +57,7 @@ def init_rpi():
     PWM_RIGHT_TOP_5VE =   GPIO.PWM(PIN_RIGHT_TOP_5VE, PWM_VALUE)
 
 def forword():
+    """Move raspberry pi bot forward"""
     PWM_RIGHT_TOP_5VE.start(PWM_VALUE)
     PWM_RIGHT_TOP_GND.stop()
     GPIO.output(PIN_RIGHT_TOP_5VE, GPIO.HIGH)
@@ -99,6 +79,7 @@ def forword():
     GPIO.output(PIN_RIGHT_BOTTOM_GND, GPIO.LOW)
 
 def stop():
+    """Stop raspberry pi"""
     GPIO.output(PIN_RIGHT_TOP_5VE, GPIO.LOW)
     GPIO.output(PIN_RIGHT_TOP_GND, GPIO.LOW)
     GPIO.output(PIN_LEFT_TOP_5VE, GPIO.LOW)
@@ -118,6 +99,7 @@ def stop():
     PWM_RIGHT_BOTTOM_GND.stop()
     
 def reverse():
+    """Move raspberry pi bot reverse"""
     PWM_RIGHT_TOP_5VE.stop()
     PWM_RIGHT_TOP_GND.start(PWM_VALUE)
     GPIO.output(PIN_RIGHT_TOP_5VE, GPIO.LOW)
@@ -138,13 +120,14 @@ def reverse():
     GPIO.output(PIN_RIGHT_BOTTOM_5VE, GPIO.LOW)
     GPIO.output(PIN_RIGHT_BOTTOM_GND, GPIO.HIGH)
     
-def right():
+def right(pwm_speed):
+    """Move raspberry pi bot to right"""
     PWM_RIGHT_TOP_5VE.start(1)
     PWM_RIGHT_TOP_GND.stop()
     GPIO.output(PIN_RIGHT_TOP_5VE, GPIO.HIGH)
     GPIO.output(PIN_RIGHT_TOP_GND, GPIO.LOW)
 
-    PWM_LEFT_TOP_5VE.start(PWM_VALUE*2)
+    PWM_LEFT_TOP_5VE.start(pwm_speed)
     PWM_LEFT_TOP_GND.stop()
     GPIO.output(PIN_LEFT_TOP_5VE, GPIO.HIGH)
     GPIO.output(PIN_LEFT_TOP_GND, GPIO.LOW)
@@ -154,13 +137,14 @@ def right():
     GPIO.output(PIN_LEFT_BOTTOM_5VE, GPIO.HIGH)
     GPIO.output(PIN_LEFT_BOTTOM_GND, GPIO.LOW)
 
-    PWM_RIGHT_BOTTOM_5VE.start(PWM_VALUE*2)
+    PWM_RIGHT_BOTTOM_5VE.start(pwm_speed)
     PWM_RIGHT_BOTTOM_GND.stop()
     GPIO.output(PIN_RIGHT_BOTTOM_5VE, GPIO.HIGH)
     GPIO.output(PIN_RIGHT_BOTTOM_GND, GPIO.LOW)  
       
-def left():
-    PWM_RIGHT_TOP_5VE.start(PWM_VALUE*2)
+def left(pwm_speed):
+    """Move raspberry pi bot to left"""
+    PWM_RIGHT_TOP_5VE.start(pwm_speed)
     PWM_RIGHT_TOP_GND.stop()
     GPIO.output(PIN_RIGHT_TOP_5VE, GPIO.HIGH)
     GPIO.output(PIN_RIGHT_TOP_GND, GPIO.LOW)
@@ -170,7 +154,7 @@ def left():
     GPIO.output(PIN_LEFT_TOP_5VE, GPIO.HIGH)
     GPIO.output(PIN_LEFT_TOP_GND, GPIO.LOW)
     
-    PWM_LEFT_BOTTOM_5VE.start(PWM_VALUE*2)
+    PWM_LEFT_BOTTOM_5VE.start(pwm_speed)
     PWM_LEFT_BOTTOM_GND.stop()
     GPIO.output(PIN_LEFT_BOTTOM_5VE, GPIO.HIGH)
     GPIO.output(PIN_LEFT_BOTTOM_GND, GPIO.LOW)
@@ -180,32 +164,84 @@ def left():
     GPIO.output(PIN_RIGHT_BOTTOM_5VE, GPIO.HIGH)
     GPIO.output(PIN_RIGHT_BOTTOM_GND, GPIO.LOW)
 
-if __name__=="__main__":
-    cam_thread = threading.Thread(target=webcam_operation, )
-    cam_thread.start()
+  
+def move_bot_based_on_image(img):
+    """Move bot depending on image"""
+    global position
+    global pwm_speed
+    global last_pwm
+    global arr
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    pixel_sum = sum(sum(gray))/len(gray)
+    if len(arr)>=10:
+        arr.append(pixel_sum)
+        arr=arr[1:-1]
+    else:
+        arr.append(pixel_sum)
+    pixel_sum = (sum(arr)//len(arr))-20
+    ret, gray = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
+    h, w = gray.shape
+    bottom_half = gray[int(h/2):,:]
+    left_img=bottom_half[:,:int(w/2)]
+    right_img=bottom_half[:,int(w/2):w]
+    left_view, right_view = sum(left_img.ravel())/(left_img.shape[0]*left_img.shape[1]), sum(right_img.ravel())/(right_img.shape[0]*right_img.shape[1])
+    avg = left_view - right_view
+    limit = 35
+    limit_darkness = 50
+    limit_brightness = 170
+    data={"avg": avg, "left_view": left_view, "right_view": right_view, "position":position}
+    print(data)
+    
+    if ((limit_darkness> left_view and limit_darkness> right_view ) or (left_view>limit_brightness and right_view>limit_brightness)):
+        position = 'S'
+        stop()
+    else:    
+        pwm_speed = int(PWM_VALUE*(abs(avg)-limit)/8)
+        pwm_speed = 11 if pwm_speed<=11 else pwm_speed
+        pwm_speed = 99 if pwm_speed>99 else pwm_speed
+        if -1*limit <avg and avg< limit and position!='F':
+            print('Stright')
+            position = 'F'
+            forword()        
+        elif avg>limit:
+            position = 'R'
+            print(pwm_speed, right_view)
+            right(pwm_speed)
+            last_pwm = pwm_speed
+        elif avg < -1*limit:
+            position = 'L'
+            print(pwm_speed, left_view)
+            left(pwm_speed)
+            last_pwm = pwm_speed
+        
+    return data, bottom_half
+    
+
+def start_bot():
+    """start bot
+    1. stat camera and get image
+    2. process image and decide movement of bot"""
+    video = cv2.VideoCapture(0)
+    global position
     init_rpi()
     stop()
-
+    position = None
+    video = cv2.VideoCapture(0)
+    video.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+    video.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+    i = 1
     while True:
-        print('8. forword')
-        print('2. reverse')
-        print('4. left')
-        print('6. right')
-        print('5. stop')
-        inpu = input('please press')
-        if inpu==8:
-            forword()
-        elif inpu==2:
-            reverse()
-        elif inpu==6:
-            right()
-        elif inpu==4:
-            left()
-        else:
-            print("wrong input", inpu)
-            stop()
-            cam_thread.join()
-            print('exit')
-            GPIO.cleanup()
-            exit(1)
-                
+        _, image = video.read()
+        data, bottom_half = move_bot_based_on_image(image)
+        cv2.imwrite('lane_images/'+str(i)+'_'+str(data)+'.jpg', bottom_half)
+        cv2.imshow('bottom half', bottom_half)
+        i+=1
+        # Wait longer to prevent freeze for videos.
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+        
+if __name__=="__main__":
+    for file in os.listdir('lane_images/'):
+        os.remove('lane_images/'+file)
+    start_bot()
+

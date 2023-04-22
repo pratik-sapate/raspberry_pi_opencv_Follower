@@ -1,45 +1,13 @@
 import cv2
-import numpy as np
-import math
 WM_VALUE = 10
 pwm_speed = 1
 last_pwm = 0
 position='S'
 arr = []
-def roi(image):
-    width, height= image.shape
-    # triangle = np.array([(0, width), (0, int(3*width/4)), (int(height/2), int(width/2)), (height, int(3*width/4)), (height, width)])
-    half = np.array([(0, width), (0, int(width / 2)), (height, int(width / 2)), (height, width)])
-    mask = np.zeros_like(image)
-    cv2.fillPoly(mask, np.int32([half]), (255, 0, 0), 255)
-    masked_image = cv2.bitwise_and(image, image, mask=mask)
-    return masked_image
 
-
-def get_angle_move(img):
-    hMin = 40
-    sMin = 0
-    vMin = 0
-    hMax = 255
-    sMax = 255
-    vMax = 255
-    lower = np.array([hMin, sMin, vMin])
-    upper = np.array([hMax, sMax, vMax])
-    # Create HSV Image and threshold into a range.
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, lower, upper)
-    output = cv2.bitwise_and(img, img, mask=mask)
-
-    gray = cv2.cvtColor(output, cv2.COLOR_BGR2GRAY)
-    image_masked = roi(gray)
-    h, w = image_masked.shape
-    left_img=image_masked[:,:int(w/2)]
-    #right_img=image_masked[:,w:-1]
-    #print(image_masked[:,w])
-    data = [0,0,0,0,0,0]
-    return np.average(data), left_img
-    
-def get_two_side_view(img):
+def test_movement_of_raspberry_pi_bot(img):
+    """Test movement of raspberry pi camera
+    This will help to get parameter for bot movement"""
     global position
     global pwm_speed
     global last_pwm
@@ -51,7 +19,6 @@ def get_two_side_view(img):
         arr=arr[1:-1]
     else:
         arr.append(pixel_sum)
-    pixel_sum = (sum(arr)//len(arr))-20
     ret, gray = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
     h, w = gray.shape
     left_img=gray[int(h/2):,:int(w/2)]
@@ -75,7 +42,6 @@ def get_two_side_view(img):
             print('Right', pwm_speed)
             position = 'R'
             print(pwm_speed, right_view)
-            #right(pwm_speed)
             last_pwm = pwm_speed
         elif avg < -1*limit and position!='L' and last_pwm != pwm_speed:
             print('Left')
@@ -89,7 +55,10 @@ def get_two_side_view(img):
         #stop()
     return avg, ssum, left_img, right_img
     
-def webcam_operation():
+def start_bot():
+    """start bot
+    1. stat camera and get image
+    2. process image and decide movement of bot"""
     video = cv2.VideoCapture(0)
     video.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
     video.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
@@ -97,7 +66,7 @@ def webcam_operation():
     position = 'S'
     while True:
         _, image = video.read()
-        avg, ssum, left_img,  right_img= get_two_side_view(image)
+        avg, ssum, left_img,  right_img= test_movement_of_raspberry_pi_bot(image)
         cv2.imshow('real',image[int(240/2):,:,:])
         cv2.imshow('left',left_img)
         cv2.imshow('right',right_img)
@@ -107,4 +76,4 @@ def webcam_operation():
             break
         
 if __name__=="__main__":
-    webcam_operation()
+    start_bot()

@@ -1,5 +1,4 @@
 import RPi.GPIO as GPIO
-import time
 
 PIN_RIGHT_BOTTOM_GND = 5
 PIN_RIGHT_BOTTOM_5VE = 6
@@ -19,9 +18,10 @@ PWM_LEFT_TOP_GND = None
 PWM_LEFT_TOP_5VE = None
 PWM_RIGHT_TOP_GND = None
 PWM_RIGHT_TOP_5VE = None
-PWM_VALUE = 20
 
 def init_rpi():
+    """initialize raspberry pi pins
+    mode : BCM"""
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(PIN_RIGHT_BOTTOM_GND, GPIO.OUT)
     GPIO.setup(PIN_RIGHT_BOTTOM_5VE, GPIO.OUT)
@@ -51,6 +51,7 @@ def init_rpi():
     PWM_RIGHT_TOP_5VE =   GPIO.PWM(PIN_RIGHT_TOP_5VE, PWM_VALUE)
 
 def forword():
+    """Move raspberry pi bot forward"""
     PWM_RIGHT_TOP_5VE.start(PWM_VALUE)
     PWM_RIGHT_TOP_GND.stop()
     GPIO.output(PIN_RIGHT_TOP_5VE, GPIO.HIGH)
@@ -72,6 +73,7 @@ def forword():
     GPIO.output(PIN_RIGHT_BOTTOM_GND, GPIO.LOW)
 
 def stop():
+    """Stop raspberry pi"""
     GPIO.output(PIN_RIGHT_TOP_5VE, GPIO.LOW)
     GPIO.output(PIN_RIGHT_TOP_GND, GPIO.LOW)
     GPIO.output(PIN_LEFT_TOP_5VE, GPIO.LOW)
@@ -91,6 +93,7 @@ def stop():
     PWM_RIGHT_BOTTOM_GND.stop()
     
 def reverse():
+    """Move raspberry pi bot reverse"""
     PWM_RIGHT_TOP_5VE.stop()
     PWM_RIGHT_TOP_GND.start(PWM_VALUE)
     GPIO.output(PIN_RIGHT_TOP_5VE, GPIO.LOW)
@@ -112,6 +115,7 @@ def reverse():
     GPIO.output(PIN_RIGHT_BOTTOM_GND, GPIO.HIGH)
     
 def right():
+    """Move raspberry pi bot to right"""
     PWM_RIGHT_TOP_5VE.start(5)
     PWM_RIGHT_TOP_GND.stop()
     GPIO.output(PIN_RIGHT_TOP_5VE, GPIO.HIGH)
@@ -133,6 +137,7 @@ def right():
     GPIO.output(PIN_RIGHT_BOTTOM_GND, GPIO.LOW)  
       
 def left():
+    """Move raspberry pi bot to left"""
     PWM_RIGHT_TOP_5VE.start(50)
     PWM_RIGHT_TOP_GND.stop()
     GPIO.output(PIN_RIGHT_TOP_5VE, GPIO.HIGH)
